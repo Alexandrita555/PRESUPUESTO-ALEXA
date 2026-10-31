@@ -193,7 +193,7 @@ const CATS=[
  {id:'regalos',n:'Regalos',e:'🎁'},{id:'formacion',n:'Formación y trabajo',e:'📚'},{id:'suscripciones',n:'Suscripciones',e:'📱'},
  {id:'carlos',n:'Pagos por Carlos',e:'🤝'},{id:'otros',n:'Otros',e:'•'}];
 const INGRESOS=['Sueldo','Prima','Transferencia de Carlos','Venta','Otro'];
-const VERSION='2.0 web · 26 oct 2026';
+const VERSION='2.1 web · 31 oct 2026';
 const TIPOS=[{id:'necesario',n:'Necesario'},{id:'planeado',n:'Planeado'},{id:'antojo',n:'Antojo'}];
 const TEMAS={verde:['#1F6F5C','#4FB79A'],azul:['#2763A8','#6FA8E8'],ciruela:['#7A3E7A','#C58BC5'],atardecer:['#C2502E','#F08A63']};
 const MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -418,7 +418,7 @@ function vTopes(){
   h+=`</div><div style="margin-top:14px"><button class="btn primary block" id="saveTopes">Guardar topes</button></div></section>`;
   h+=`<section class="block"><h2>Colores de la app</h2><div class="card"><div class="swatches">${Object.entries(TEMAS).map(([k,v])=>`<button class="sw" data-tema="${k}" aria-label="Tema ${k}" aria-pressed="${(cfg.tema||'verde')===k}" style="background:${v[0]}"></button>`).join('')}</div></div></section>
     <section class="block"><h2>Respaldo</h2><div class="card"><p class="small muted" style="margin-top:0">Descarga todo (cupos, metas, fijos, topes y movimientos) en un archivo, o recupéralo desde un respaldo.</p>
-    <div class="actions" style="margin-top:6px">${S.downloads||S.mode==='local'?'<button class="btn primary" id="bkDown">Descargar respaldo</button>':''}<button class="btn" id="bkUp">Importar respaldo</button><input type="file" id="bkFile" accept=".json,application/json" hidden></div></div></section>
+    <div class="actions" style="margin-top:6px">${S.downloads||S.mode==='local'?'<button class="btn primary" id="bkDown">Descargar respaldo</button>':''}<button class="btn" id="bkUp">Importar respaldo</button><button class="btn" id="ajUp">Importar ajustes</button><input type="file" id="bkFile" accept=".json,application/json" hidden></div></div></section>
     <p class="ver">Mi presupuesto · versión ${VERSION}</p>`;
   main.innerHTML=h;
   main.querySelectorAll('[data-tema]').forEach(b=>b.onclick=()=>{cfg.tema=b.dataset.tema;persist('config',cfg);render();});
@@ -426,6 +426,7 @@ function vTopes(){
   document.getElementById('addMeta').onclick=()=>sheetMeta(-1);
   const bd=document.getElementById('bkDown'); if(bd) bd.onclick=exportBackup;
   document.getElementById('bkUp').onclick=()=>document.getElementById('bkFile').click();
+  document.getElementById('ajUp').onclick=()=>document.getElementById('bkFile').click();
   document.getElementById('bkFile').onchange=e=>{const f=e.target.files[0];if(f)importBackup(f);};
   main.querySelectorAll('[data-fedit]').forEach(b=>b.onclick=()=>sheetFijo(+b.dataset.fedit));
   document.getElementById('addFijo').onclick=()=>sheetFijo(-1);
@@ -478,11 +479,24 @@ async function exportBackup(){
   else{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type:'application/json'}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),4000);}
 }
 function importBackup(file){const rd=new FileReader();rd.onload=()=>{let b;try{b=JSON.parse(rd.result)}catch(e){toast('Ese archivo no es un respaldo válido.');return}
+  if(b&&b.app==='mi-presupuesto'&&b.tipo==='movimientos'){importMovs(b);return}
   if(!b||b.app!=='mi-presupuesto'||!b.config){toast('Ese archivo no es un respaldo de Mi presupuesto.');return}
   const n=Object.keys(b.meses||{}).length;
   confirmSheet('¿Recuperar este respaldo?',[`Es del ${esc(b.fecha||'')} y trae ${n} meses. Reemplaza lo que tienes ahora en la app.`],'Recuperar',()=>{
     S.cfg=normCfg(b.config);persist('config',S.cfg);Object.entries(b.meses||{}).forEach(([k,v])=>{if(/^m-\d{4}-\d{2}$/.test(k))persist(k,v);});
     S.month=(b.meses||{})[S.mk]||{items:[]};render();toast('Respaldo recuperado.');});};rd.readAsText(file);}
+
+function descMov(x){if(x.t==='ingreso')return x.concepto||'Ingreso';if(x.t==='pago'){const c=S.cfg.cupos.find(c=>c.id===x.cupoId);return 'Pago a '+(c?c.nombre:(x.nota||'deuda'))}
+  if(x.t==='ahorro'){const m=metaById(x.metaId);return (x.dir==='retiro'?'Sacado de ':'Ahorro para ')+(m?m.nombre:'meta')}return catById(x.cat).n+(x.nota?' · '+x.nota:'')}
+async function importMovs(b){
+  const its=(b.items||[]).filter(x=>x&&x.id&&['gasto','ingreso','pago','ahorro'].includes(x.t)&&x.monto>0&&/^\d{4}-\d{2}-\d{2}$/.test(x.fecha||''));
+  const nuevos=[];
+  for(const x of its){const m=await readMonth(keyOf(x.fecha));if(!(m.items||[]).some(i=>i.id===x.id))nuevos.push(x);}
+  if(!nuevos.length){toast('Estos movimientos ya estaban registrados.');return}
+  const lines=nuevos.map(x=>`${x.fecha.slice(8)}/${x.fecha.slice(5,7)} · ${esc(descMov(x))} · <strong>${fmt(x.monto)}</strong>`);
+  confirmSheet('¿Agregar '+nuevos.length+' movimiento'+(nuevos.length>1?'s':'')+'?',(b.nota?[esc(b.nota)]:[]).concat(lines),'Agregar',async()=>{
+    for(const x of nuevos){const y=Object.assign({},x);delete y.hist;await addItem(y);}toast(nuevos.length+' movimientos agregados.');});
+}
 
 /* ---------- plan de deudas ---------- */
 function recordSerie(c){const d=today();c.serie=(c.serie||[]).slice(-399);const last=c.serie[c.serie.length-1];

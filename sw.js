@@ -1,5 +1,5 @@
 // Mi presupuesto — cambia el número de CACHE cada vez que subas una versión nueva
-const CACHE = 'mipres-v2.0';
+const CACHE = 'mipres-v2.1';
 const CORE = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png',
   'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js'];
 
