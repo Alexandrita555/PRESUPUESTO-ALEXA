@@ -193,7 +193,7 @@ const CATS=[
  {id:'regalos',n:'Regalos',e:'🎁'},{id:'formacion',n:'Formación y trabajo',e:'📚'},{id:'suscripciones',n:'Suscripciones',e:'📱'},
  {id:'carlos',n:'Pagos por Carlos',e:'🤝'},{id:'otros',n:'Otros',e:'•'}];
 const INGRESOS=['Sueldo','Prima','Transferencia de Carlos','Venta','Otro'];
-const VERSION='2.1 web · 31 oct 2026';
+const VERSION='2.2 web · 6 nov 2026';
 const TIPOS=[{id:'necesario',n:'Necesario'},{id:'planeado',n:'Planeado'},{id:'antojo',n:'Antojo'}];
 const TEMAS={verde:['#1F6F5C','#4FB79A'],azul:['#2763A8','#6FA8E8'],ciruela:['#7A3E7A','#C58BC5'],atardecer:['#C2502E','#F08A63']};
 const MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -320,8 +320,8 @@ function vInicio(){
   // metas
   if(cfg.metas.length){h+=`<section class="block"><h2>Mis metas de ahorro</h2><div class="list">`;
     cfg.metas.forEach(m=>{const p=m.meta>0?m.saldo/m.meta:0;
-      h+=`<div class="card"><div class="row"><b>${esc(m.nombre)}</b><span class="small muted">meta ${fmt(m.meta)}</span></div>
-      ${bar(p,p>=1?'':p>=.5?'warn':'danger')}<div class="small muted">Tienes ${fmt(m.saldo)} · ${m.saldo>=m.meta?'¡meta cumplida!':`faltan ${fmt(m.meta-m.saldo)}`}</div>
+      h+=`<div class="card"><div class="row"><b>${esc(m.nombre)}</b><span class="small muted">${m.meta>0?'meta '+fmt(m.meta):'sin meta'}</span></div>
+      ${m.meta>0?bar(p,p>=1?'':p>=.5?'warn':'danger'):''}<div class="small muted">Tienes <b>${fmt(m.saldo)}</b>${m.meta>0?' · '+(m.saldo>=m.meta?'¡meta cumplida!':`faltan ${fmt(m.meta-m.saldo)}`):''}</div>
       <div class="actions"><button class="btn primary" data-mah="${esc(m.id)}">Ahorrar</button><button class="btn" data-msa="${esc(m.id)}">Sacar</button></div></div>`;});
     h+=`</div></section>`;}
   // antojos
@@ -410,7 +410,7 @@ function vTopes(){
   h+=`</div><div style="margin-top:10px"><button class="btn block" id="addFijo">+ Agregar pago fijo</button></div></section>`;
   h+=`<section class="block"><h2>Metas de ahorro</h2><div class="card">`;
   if(!cfg.metas.length) h+=`<div class="empty">Aún no tienes metas.</div>`;
-  cfg.metas.forEach((m,i)=>{h+=`<div class="item"><div class="grow"><div>${esc(m.nombre)}</div><div class="small muted">${fmt(m.saldo)} de ${fmt(m.meta)}</div></div><button class="btn ghost" data-medit="${i}">Editar</button></div>`;});
+  cfg.metas.forEach((m,i)=>{h+=`<div class="item"><div class="grow"><div>${esc(m.nombre)}</div><div class="small muted">${m.meta>0?fmt(m.saldo)+' de '+fmt(m.meta):'Tienes '+fmt(m.saldo)+' · sin meta'}</div></div><button class="btn ghost" data-medit="${i}">Editar</button></div>`;});
   h+=`</div><div style="margin-top:10px"><button class="btn block" id="addMeta">+ Nueva meta</button></div></section>`;
   h+=`<section class="block"><h2>Topes del mes</h2><p class="small muted" style="margin:-4px 0 10px">Cuánto te permites gastar al mes en cada cosa. Deja en blanco lo que no quieras limitar.</p><div class="card">`;
   CATS.forEach(c=>{h+=`<div class="topes-row"><span class="em">${c.e}</span><label for="tp-${c.id}">${c.n}<div class="small muted">Este mes: ${fmt(T.porCat[c.id]||0)}</div></label>
@@ -490,12 +490,21 @@ function descMov(x){if(x.t==='ingreso')return x.concepto||'Ingreso';if(x.t==='pa
   if(x.t==='ahorro'){const m=metaById(x.metaId);return (x.dir==='retiro'?'Sacado de ':'Ahorro para ')+(m?m.nombre:'meta')}return catById(x.cat).n+(x.nota?' · '+x.nota:'')}
 async function importMovs(b){
   const its=(b.items||[]).filter(x=>x&&x.id&&['gasto','ingreso','pago','ahorro'].includes(x.t)&&x.monto>0&&/^\d{4}-\d{2}-\d{2}$/.test(x.fecha||''));
+  const nc=(b.nuevosCupos||[]).filter(c=>c&&c.id&&c.nombre&&c.cupo>0&&!S.cfg.cupos.some(k=>k.id===c.id));
+  const nm=(b.nuevasMetas||[]).filter(m=>m&&m.id&&m.nombre&&!S.cfg.metas.some(k=>k.id===m.id));
   const nuevos=[];
   for(const x of its){const m=await readMonth(keyOf(x.fecha));if(!(m.items||[]).some(i=>i.id===x.id))nuevos.push(x);}
-  if(!nuevos.length){toast('Estos movimientos ya estaban registrados.');return}
-  const lines=nuevos.map(x=>`${x.fecha.slice(8)}/${x.fecha.slice(5,7)} · ${esc(descMov(x))} · <strong>${fmt(x.monto)}</strong>`);
-  confirmSheet('¿Agregar '+nuevos.length+' movimiento'+(nuevos.length>1?'s':'')+'?',(b.nota?[esc(b.nota)]:[]).concat(lines),'Agregar',async()=>{
-    for(const x of nuevos){const y=Object.assign({},x);delete y.hist;await addItem(y);}toast(nuevos.length+' movimientos agregados.');});
+  const total=nuevos.length+nc.length+nm.length;
+  if(!total){toast('Estos cambios ya estaban en la app.');return}
+  const lines=nc.map(c=>`Nueva tarjeta: <strong>${esc(c.nombre)}</strong> · cupo ${fmt(c.cupo)}${c.congelado?' · ❄ congelada':''}`)
+    .concat(nm.map(m=>`Nueva opción de ahorro: <strong>${esc(m.nombre)}</strong> · tienes ${fmt(m.saldo||0)}`))
+    .concat(nuevos.map(x=>`${x.fecha.slice(8)}/${x.fecha.slice(5,7)} · ${esc(descMov(x))} · <strong>${fmt(x.monto)}</strong>`));
+  confirmSheet('¿Agregar '+total+' cambio'+(total>1?'s':'')+'?',(b.nota?[esc(b.nota)]:[]).concat(lines),'Agregar',async()=>{
+    nc.forEach(c=>{const y=Object.assign({consumo:0,meta:.3,congelado:false},c);recordSerie(y);S.cfg.cupos.push(y);});
+    nm.forEach(m=>S.cfg.metas.push(Object.assign({meta:0,saldo:0},m)));
+    if(nc.length||nm.length)persist('config',S.cfg);
+    for(const x of nuevos){const y=Object.assign({},x);delete y.hist;await addItem(y);}
+    render();toast(total+' cambios agregados.');});
 }
 
 /* ---------- plan de deudas ---------- */
@@ -706,7 +715,7 @@ function saveMov(tipo){
   if(tipo==='ahorro'){const mt=metaById(draft.metaId);if(!mt){err.textContent='Primero crea una meta en la pestaña Plan.';return}
     x.metaId=mt.id;x.dir=draft.dir==='retiro'?'retiro':'aporte';if(x.dir==='aporte'&&fuente&&fuente.startsWith('ing:'))x.fuente=fuente;
     if(x.dir==='retiro'&&monto>mt.saldo){err.textContent='Solo tienes '+fmt(mt.saldo)+' en esa meta.';return}
-    closeSheet();draft=null;addItem(x).then(()=>{toast(mt.saldo>=mt.meta?'Guardado. ¡Meta cumplida!':`Guardado. ${mt.nombre}: faltan ${fmt(mt.meta-mt.saldo)}.`)});return}
+    closeSheet();draft=null;addItem(x).then(()=>{toast(!(mt.meta>0)?`Guardado. ${mt.nombre}: tienes ${fmt(mt.saldo)}.`:mt.saldo>=mt.meta?'Guardado. ¡Meta cumplida!':`Guardado. ${mt.nombre}: faltan ${fmt(mt.meta-mt.saldo)}.`)});return}
   if(fuente)x.fuente=fuente;
   if(tipo==='pago'){if(!draft.cupoId){err.textContent='Elige a qué deuda le pagaste.';return}x.cupoId=draft.cupoId;if(draft.fijoId)x.fijoId=draft.fijoId;closeSheet();draft=null;
     addItem(x).then(()=>{const c=S.cfg.cupos.find(c=>c.id===x.cupoId);toast(c?`Pago guardado. ${c.nombre}: debes ${fmt(c.consumo)}.`:'Pago guardado.')});return}
