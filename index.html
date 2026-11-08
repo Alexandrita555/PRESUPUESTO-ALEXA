@@ -193,7 +193,7 @@ const CATS=[
  {id:'regalos',n:'Regalos',e:'🎁'},{id:'formacion',n:'Formación y trabajo',e:'📚'},{id:'suscripciones',n:'Suscripciones',e:'📱'},
  {id:'carlos',n:'Pagos por Carlos',e:'🤝'},{id:'otros',n:'Otros',e:'•'}];
 const INGRESOS=['Sueldo','Prima','Transferencia de Carlos','Venta','Otro'];
-const VERSION='2.3 web · 7 nov 2026';
+const VERSION='2.4 web · 7 nov 2026';
 const TIPOS=[{id:'necesario',n:'Necesario'},{id:'planeado',n:'Planeado'},{id:'antojo',n:'Antojo'}];
 const TEMAS={verde:['#1F6F5C','#4FB79A'],azul:['#2763A8','#6FA8E8'],ciruela:['#7A3E7A','#C58BC5'],atardecer:['#C2502E','#F08A63']};
 const MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -212,6 +212,12 @@ const normCfg=c=>{c=c||emptyCfg();c.cupos=c.cupos||[];c.topes=c.topes||{};c.fijo
   delete c.fondo;c.rec=c.rec||[];return c};
 const metaById=id=>S.cfg.metas.find(m=>m.id===(id||'fondo'))||S.cfg.metas[0];
 const esUSD=m=>!!(m&&m.moneda==='USD');
+const diasEntre=(a,b)=>Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/864e5);
+const fCorta=f=>{const d=new Date(f+'T00:00:00');return d.getDate()+' '+['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][d.getMonth()]+' '+d.getFullYear()};
+function cdtInfo(m){if(!m||!m.vence)return null;const falta=diasEntre(today(),m.vence);const plazo=m.apertura?diasEntre(m.apertura,m.vence):0;
+  const gan=(m.tasa>0&&plazo>0)?m.saldo*(Math.pow(1+m.tasa/100,plazo/365)-1):0;return {falta,plazo,gan}}
+function cdtLine(m){const c=cdtInfo(m);if(!c)return '';
+  return `<div class="small" style="margin-top:6px">${c.falta>=0?`Vence el <b>${fCorta(m.vence)}</b> (${c.falta===0?'hoy':c.falta===1?'mañana':'en '+c.falta+' días'})`:`Venció el <b>${fCorta(m.vence)}</b>`}${m.tasa?` · ${String(m.tasa).replace('.',',')}% E.A.`:''}${c.gan>0?` · ganancia estimada ≈ <b>${fmt(c.gan)}</b> antes de retención`:''}</div>`}
 const fmtUSD=n=>'USD '+(Math.round((n||0)*100)/100).toLocaleString('es-CO',{maximumFractionDigits:2});
 const parseUSD=v=>{const n=parseFloat(String(v).replace(/\s/g,'').replace(',','.'));return isNaN(n)?0:Math.round(n*100)/100};
 const usdEnPesos=m=>S.trm?m.usd*S.trm.v:m.saldo;
@@ -329,6 +335,7 @@ function vInicio(){
     cfg.metas.forEach(m=>{const p=m.meta>0?m.saldo/m.meta:0;
       h+=`<div class="card"><div class="row"><b>${esc(m.nombre)}</b><span class="small muted">${m.meta>0?'meta '+fmt(m.meta):'sin meta'}</span></div>
       ${m.meta>0?bar(p,p>=1?'':p>=.5?'warn':'danger'):''}<div class="small muted">${esUSD(m)?`Tienes <b>${fmtUSD(m.usd)}</b> · ≈ <b>${fmt(usdEnPesos(m))}</b>${S.trm?` con la TRM de hoy (${fmt(S.trm.v)})`:''}`:`Tienes <b>${fmt(m.saldo)}</b>${m.meta>0?' · '+(m.saldo>=m.meta?'¡meta cumplida!':`faltan ${fmt(m.meta-m.saldo)}`):''}`}</div>
+      ${cdtLine(m)}
       <div class="actions"><button class="btn primary" data-mah="${esc(m.id)}">Ahorrar</button><button class="btn" data-msa="${esc(m.id)}">Sacar</button></div></div>`;});
     h+=`</div></section>`;}
   // antojos
@@ -339,6 +346,8 @@ function vInicio(){
       (T.porTipo.antojo?`<p class="small" style="margin:10px 0 0">Los antojos son el <b>${Math.round(T.porTipo.antojo/tsum*100)}%</b> de lo que marcaste este mes.</p>`:'')+`</div></section>`;}
   // alertas
   const al=[];
+  cfg.metas.forEach(m=>{const c=cdtInfo(m);if(!c)return;if(c.falta>=0&&c.falta<=10)al.push(['warn',`Tu <strong>${esc(m.nombre)}</strong> vence el ${fCorta(m.vence)}${c.falta===0?' (hoy)':` (en ${c.falta} día${c.falta>1?'s':''})`}. Si vas a aportar, alista el dinero para renovarlo ese día.`]);
+    else if(c.falta<0)al.push(['warn',`Tu <strong>${esc(m.nombre)}</strong> venció el ${fCorta(m.vence)}. Cuando lo renueves, actualiza su saldo y la nueva fecha en Plan → Metas de ahorro.`]);});
   cfg.cupos.forEach(c=>{if(c.topeMes>0){const u=T.porCupo[c.id]||0;if(u>c.topeMes)al.push(['danger',`Te pasaste del tope mensual de <strong>${esc(c.nombre)}</strong> por ${fmt(u-c.topeMes)}.`]);else if(u>=c.topeMes*.8)al.push(['warn',`Llevas ${fmt(u)} de ${fmt(c.topeMes)} en <strong>${esc(c.nombre)}</strong> este mes.`]);}});
   if(T.tarjeta>0) al.push(['warn',`Este mes ya sumaste <strong>${fmt(T.tarjeta)}</strong> en compras con tarjeta o crédito. Eso es deuda nueva.`]);
   CATS.forEach(c=>{const tope=cfg.topes[c.id];const g=T.porCat[c.id]||0;if(tope>0&&g>tope)al.push(['danger',`Te pasaste del tope de <strong>${c.n.toLowerCase()}</strong> por ${fmt(g-tope)}.`]);
@@ -417,7 +426,7 @@ function vTopes(){
   h+=`</div><div style="margin-top:10px"><button class="btn block" id="addFijo">+ Agregar pago fijo</button></div></section>`;
   h+=`<section class="block"><h2>Metas de ahorro</h2><div class="card">`;
   if(!cfg.metas.length) h+=`<div class="empty">Aún no tienes metas.</div>`;
-  cfg.metas.forEach((m,i)=>{h+=`<div class="item"><div class="grow"><div>${esc(m.nombre)}</div><div class="small muted">${esUSD(m)?fmtUSD(m.usd)+' · ≈ '+fmt(usdEnPesos(m)):(m.meta>0?fmt(m.saldo)+' de '+fmt(m.meta):'Tienes '+fmt(m.saldo)+' · sin meta')}</div></div><button class="btn ghost" data-medit="${i}">Editar</button></div>`;});
+  cfg.metas.forEach((m,i)=>{h+=`<div class="item"><div class="grow"><div>${esc(m.nombre)}</div><div class="small muted">${esUSD(m)?fmtUSD(m.usd)+' · ≈ '+fmt(usdEnPesos(m)):(m.meta>0?fmt(m.saldo)+' de '+fmt(m.meta):'Tienes '+fmt(m.saldo)+' · sin meta')}${m.vence?' · vence '+fCorta(m.vence):''}</div></div><button class="btn ghost" data-medit="${i}">Editar</button></div>`;});
   h+=`</div><div style="margin-top:10px"><button class="btn block" id="addMeta">+ Nueva meta</button></div></section>`;
   h+=`<section class="block"><h2>Topes del mes</h2><p class="small muted" style="margin:-4px 0 10px">Cuánto te permites gastar al mes en cada cosa. Deja en blanco lo que no quieras limitar.</p><div class="card">`;
   CATS.forEach(c=>{h+=`<div class="topes-row"><span class="em">${c.e}</span><label for="tp-${c.id}">${c.n}<div class="small muted">Este mes: ${fmt(T.porCat[c.id]||0)}</div></label>
@@ -788,11 +797,18 @@ function sheetMeta(i){
     <label class="f" for="foN">Nombre</label><input class="t" id="foN" value="${esc(fo.nombre)}">
     <label class="f" for="foM">Meta</label><input class="t num" id="foM" inputmode="numeric" value="${fo.meta?fo.meta.toLocaleString('es-CO'):''}">
     <label class="f" for="foS">Lo que tienes hoy${esUSD(fo)?' (en pesos, aproximado)':''}</label><input class="t num" id="foS" inputmode="numeric" value="${fo.saldo?fo.saldo.toLocaleString('es-CO'):''}" placeholder="$0">
+    <details ${fo.vence?'open':''}><summary>¿Es un CDT o inversión a plazo?</summary>
+      <label class="f" for="foA">Fecha de apertura</label><input class="t" type="date" id="foA" value="${fo.apertura||''}">
+      <label class="f" for="foV">Fecha de vencimiento</label><input class="t" type="date" id="foV" value="${fo.vence||''}">
+      <label class="f" for="foT">Tasa efectiva anual (%)</label><input class="t num" id="foT" inputmode="decimal" placeholder="Ej.: 10,2" value="${fo.tasa?String(fo.tasa).replace('.',','):''}">
+      <p class="small muted">Al renovarlo: pon el nuevo saldo (con los intereses que te sumaron) y las fechas nuevas.</p></details>
     ${esUSD(fo)?`<label class="f" for="foU">Saldo en dólares</label><input class="t num" id="foU" inputmode="decimal" value="${fo.usd||''}" placeholder="Ej.: 20">`:''}
     <div class="actions"><button class="btn primary" id="foSave" style="flex:1">Guardar</button>${i>=0?'<button class="btn" id="foDel">Quitar</button>':''}</div>`,()=>{
     ['foM','foS'].forEach(id=>moneyInput(document.getElementById(id)));
     document.getElementById('foSave').onclick=()=>{const nm={...fo,nombre:document.getElementById('foN').value.trim().slice(0,50)||'Mi meta',
       meta:parseMoney(document.getElementById('foM').value),saldo:parseMoney(document.getElementById('foS').value)};if(esUSD(fo))nm.usd=parseUSD(document.getElementById('foU').value);
+      {const a=document.getElementById('foA').value,v=document.getElementById('foV').value,t=parseUSD(document.getElementById('foT').value);
+       if(v){nm.vence=v;nm.apertura=a||nm.apertura||'';nm.tasa=t||0;}else{delete nm.vence;delete nm.apertura;delete nm.tasa;}}
       if(i>=0)S.cfg.metas[i]=nm;else{nm.id='m'+uid8();S.cfg.metas.push(nm);}persist('config',S.cfg);closeSheet();render();toast('Meta guardada.');};
     const d=document.getElementById('foDel');if(d)d.onclick=()=>{closeSheet();confirmSheet('¿Quitar '+fo.nombre+'?',['Los movimientos ya registrados se conservan.'],'Quitar',()=>{S.cfg.metas.splice(i,1);persist('config',S.cfg);render();});};
   });
