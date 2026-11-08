@@ -193,7 +193,7 @@ const CATS=[
  {id:'regalos',n:'Regalos',e:'🎁'},{id:'formacion',n:'Formación y trabajo',e:'📚'},{id:'suscripciones',n:'Suscripciones',e:'📱'},
  {id:'carlos',n:'Pagos por Carlos',e:'🤝'},{id:'otros',n:'Otros',e:'•'}];
 const INGRESOS=['Sueldo','Prima','Transferencia de Carlos','Venta','Otro'];
-const VERSION='2.4 web · 7 nov 2026';
+const VERSION='2.5 web · 8 nov 2026';
 const TIPOS=[{id:'necesario',n:'Necesario'},{id:'planeado',n:'Planeado'},{id:'antojo',n:'Antojo'}];
 const TEMAS={verde:['#1F6F5C','#4FB79A'],azul:['#2763A8','#6FA8E8'],ciruela:['#7A3E7A','#C58BC5'],atardecer:['#C2502E','#F08A63']};
 const MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -221,6 +221,9 @@ function cdtLine(m){const c=cdtInfo(m);if(!c)return '';
 const fmtUSD=n=>'USD '+(Math.round((n||0)*100)/100).toLocaleString('es-CO',{maximumFractionDigits:2});
 const parseUSD=v=>{const n=parseFloat(String(v).replace(/\s/g,'').replace(',','.'));return isNaN(n)?0:Math.round(n*100)/100};
 const usdEnPesos=m=>S.trm?m.usd*S.trm.v:m.saldo;
+const metaP=m=>esUSD(m)?(m.metaUSD>0?(m.usd||0)/m.metaUSD:0):(m.meta>0?m.saldo/m.meta:0);
+const tieneMeta=m=>esUSD(m)?m.metaUSD>0:m.meta>0;
+const faltaTxt=m=>esUSD(m)?((m.usd||0)>=m.metaUSD?'¡meta cumplida!':'faltan '+fmtUSD(m.metaUSD-(m.usd||0))):(m.saldo>=m.meta?'¡meta cumplida!':'faltan '+fmt(m.meta-m.saldo));
 function loadTRM(){const c=LS.get('trm');if(c&&c.v)S.trm=c;
   fetch('https://www.datos.gov.co/resource/32sa-8pi3.json?$limit=1&$order=vigenciadesde%20DESC').then(r=>r.json()).then(a=>{const v=parseFloat(a&&a[0]&&a[0].valor);
     if(v>0){S.trm={v,f:String(a[0].vigenciadesde||'').slice(0,10)};LS.set('trm',S.trm);if(S.cfg&&S.month)render();}}).catch(()=>{});}
@@ -332,9 +335,9 @@ function vInicio(){
     h+=`<p class="small muted" style="margin:0">Para descontar de aquí, elige este ingreso en «¿Con qué plata?» al registrar.</p></div></section>`;}
   // metas
   if(cfg.metas.length){h+=`<section class="block"><h2>Mis metas de ahorro</h2><div class="list">`;
-    cfg.metas.forEach(m=>{const p=m.meta>0?m.saldo/m.meta:0;
-      h+=`<div class="card"><div class="row"><b>${esc(m.nombre)}</b><span class="small muted">${m.meta>0?'meta '+fmt(m.meta):'sin meta'}</span></div>
-      ${m.meta>0?bar(p,p>=1?'':p>=.5?'warn':'danger'):''}<div class="small muted">${esUSD(m)?`Tienes <b>${fmtUSD(m.usd)}</b> · ≈ <b>${fmt(usdEnPesos(m))}</b>${S.trm?` con la TRM de hoy (${fmt(S.trm.v)})`:''}`:`Tienes <b>${fmt(m.saldo)}</b>${m.meta>0?' · '+(m.saldo>=m.meta?'¡meta cumplida!':`faltan ${fmt(m.meta-m.saldo)}`):''}`}</div>
+    cfg.metas.forEach(m=>{const p=metaP(m);
+      h+=`<div class="card"><div class="row"><b>${esc(m.nombre)}</b><span class="small muted">${tieneMeta(m)?'meta '+(esUSD(m)?fmtUSD(m.metaUSD):fmt(m.meta)):'sin meta'}</span></div>
+      ${tieneMeta(m)?bar(p,p>=1?'':p>=.5?'warn':'danger'):''}<div class="small muted">${esUSD(m)?`Tienes <b>${fmtUSD(m.usd)}</b> · ≈ <b>${fmt(usdEnPesos(m))}</b>${S.trm?` con la TRM de hoy (${fmt(S.trm.v)})`:''}${tieneMeta(m)?' · '+faltaTxt(m)+(p<1?` (${Math.round(p*100)}%)`:''):''}`:`Tienes <b>${fmt(m.saldo)}</b>${m.meta>0?' · '+(m.saldo>=m.meta?'¡meta cumplida!':`faltan ${fmt(m.meta-m.saldo)}`):''}`}</div>
       ${cdtLine(m)}
       <div class="actions"><button class="btn primary" data-mah="${esc(m.id)}">Ahorrar</button><button class="btn" data-msa="${esc(m.id)}">Sacar</button></div></div>`;});
     h+=`</div></section>`;}
@@ -426,7 +429,7 @@ function vTopes(){
   h+=`</div><div style="margin-top:10px"><button class="btn block" id="addFijo">+ Agregar pago fijo</button></div></section>`;
   h+=`<section class="block"><h2>Metas de ahorro</h2><div class="card">`;
   if(!cfg.metas.length) h+=`<div class="empty">Aún no tienes metas.</div>`;
-  cfg.metas.forEach((m,i)=>{h+=`<div class="item"><div class="grow"><div>${esc(m.nombre)}</div><div class="small muted">${esUSD(m)?fmtUSD(m.usd)+' · ≈ '+fmt(usdEnPesos(m)):(m.meta>0?fmt(m.saldo)+' de '+fmt(m.meta):'Tienes '+fmt(m.saldo)+' · sin meta')}${m.vence?' · vence '+fCorta(m.vence):''}</div></div><button class="btn ghost" data-medit="${i}">Editar</button></div>`;});
+  cfg.metas.forEach((m,i)=>{h+=`<div class="item"><div class="grow"><div>${esc(m.nombre)}</div><div class="small muted">${esUSD(m)?fmtUSD(m.usd)+(m.metaUSD>0?' de '+fmtUSD(m.metaUSD):'')+' · ≈ '+fmt(usdEnPesos(m)):(m.meta>0?fmt(m.saldo)+' de '+fmt(m.meta):'Tienes '+fmt(m.saldo)+' · sin meta')}${m.vence?' · vence '+fCorta(m.vence):''}</div></div><button class="btn ghost" data-medit="${i}">Editar</button></div>`;});
   h+=`</div><div style="margin-top:10px"><button class="btn block" id="addMeta">+ Nueva meta</button></div></section>`;
   h+=`<section class="block"><h2>Topes del mes</h2><p class="small muted" style="margin:-4px 0 10px">Cuánto te permites gastar al mes en cada cosa. Deja en blanco lo que no quieras limitar.</p><div class="card">`;
   CATS.forEach(c=>{h+=`<div class="topes-row"><span class="em">${c.e}</span><label for="tp-${c.id}">${c.n}<div class="small muted">Este mes: ${fmt(T.porCat[c.id]||0)}</div></label>
@@ -738,7 +741,7 @@ function saveMov(tipo){
     if(x.dir==='retiro'&&!esUSD(mt)&&monto>mt.saldo){err.textContent='Solo tienes '+fmt(mt.saldo)+' en esa meta.';return}
     if(esUSD(mt)){const ue=document.getElementById('mUSD');const u=ue?parseUSD(ue.value):0;if(!u){err.textContent='Escribe cuántos dólares.';return}
       if(x.dir==='retiro'&&u>(mt.usd||0)+.001){err.textContent='Solo tienes '+fmtUSD(mt.usd)+' en esa meta.';return}x.usd=u;}
-    closeSheet();draft=null;addItem(x).then(()=>{toast(esUSD(mt)?`Guardado. ${mt.nombre}: tienes ${fmtUSD(mt.usd)}.`:!(mt.meta>0)?`Guardado. ${mt.nombre}: tienes ${fmt(mt.saldo)}.`:mt.saldo>=mt.meta?'Guardado. ¡Meta cumplida!':`Guardado. ${mt.nombre}: faltan ${fmt(mt.meta-mt.saldo)}.`)});return}
+    closeSheet();draft=null;addItem(x).then(()=>{toast(esUSD(mt)?`Guardado. ${mt.nombre}: tienes ${fmtUSD(mt.usd)}${mt.metaUSD>0?', '+faltaTxt(mt):''}.`:!(mt.meta>0)?`Guardado. ${mt.nombre}: tienes ${fmt(mt.saldo)}.`:mt.saldo>=mt.meta?'Guardado. ¡Meta cumplida!':`Guardado. ${mt.nombre}: faltan ${fmt(mt.meta-mt.saldo)}.`)});return}
   if(fuente)x.fuente=fuente;
   if(tipo==='pago'){if(!draft.cupoId){err.textContent='Elige a qué deuda le pagaste.';return}x.cupoId=draft.cupoId;if(draft.fijoId)x.fijoId=draft.fijoId;closeSheet();draft=null;
     addItem(x).then(()=>{const c=S.cfg.cupos.find(c=>c.id===x.cupoId);toast(c?`Pago guardado. ${c.nombre}: debes ${fmt(c.consumo)}.`:'Pago guardado.')});return}
@@ -795,7 +798,7 @@ function sheetMeta(i){
   const fo=i>=0?S.cfg.metas[i]:{nombre:'',meta:0,saldo:0};
   openSheet(`<h3>${i>=0?'Editar meta':'Nueva meta'}</h3>
     <label class="f" for="foN">Nombre</label><input class="t" id="foN" value="${esc(fo.nombre)}">
-    <label class="f" for="foM">Meta</label><input class="t num" id="foM" inputmode="numeric" value="${fo.meta?fo.meta.toLocaleString('es-CO'):''}">
+    ${esUSD(fo)?`<label class="f" for="foM">Meta en dólares</label><input class="t num" id="foM" inputmode="decimal" placeholder="Ej.: 500" value="${fo.metaUSD||''}">`:`<label class="f" for="foM">Meta</label><input class="t num" id="foM" inputmode="numeric" value="${fo.meta?fo.meta.toLocaleString('es-CO'):''}">`}
     <label class="f" for="foS">Lo que tienes hoy${esUSD(fo)?' (en pesos, aproximado)':''}</label><input class="t num" id="foS" inputmode="numeric" value="${fo.saldo?fo.saldo.toLocaleString('es-CO'):''}" placeholder="$0">
     <details ${fo.vence?'open':''}><summary>¿Es un CDT o inversión a plazo?</summary>
       <label class="f" for="foA">Fecha de apertura</label><input class="t" type="date" id="foA" value="${fo.apertura||''}">
@@ -804,9 +807,9 @@ function sheetMeta(i){
       <p class="small muted">Al renovarlo: pon el nuevo saldo (con los intereses que te sumaron) y las fechas nuevas.</p></details>
     ${esUSD(fo)?`<label class="f" for="foU">Saldo en dólares</label><input class="t num" id="foU" inputmode="decimal" value="${fo.usd||''}" placeholder="Ej.: 20">`:''}
     <div class="actions"><button class="btn primary" id="foSave" style="flex:1">Guardar</button>${i>=0?'<button class="btn" id="foDel">Quitar</button>':''}</div>`,()=>{
-    ['foM','foS'].forEach(id=>moneyInput(document.getElementById(id)));
+    (esUSD(fo)?['foS']:['foM','foS']).forEach(id=>moneyInput(document.getElementById(id)));
     document.getElementById('foSave').onclick=()=>{const nm={...fo,nombre:document.getElementById('foN').value.trim().slice(0,50)||'Mi meta',
-      meta:parseMoney(document.getElementById('foM').value),saldo:parseMoney(document.getElementById('foS').value)};if(esUSD(fo))nm.usd=parseUSD(document.getElementById('foU').value);
+      meta:esUSD(fo)?0:parseMoney(document.getElementById('foM').value),saldo:parseMoney(document.getElementById('foS').value)};if(esUSD(fo)){nm.usd=parseUSD(document.getElementById('foU').value);nm.metaUSD=parseUSD(document.getElementById('foM').value);}
       {const a=document.getElementById('foA').value,v=document.getElementById('foV').value,t=parseUSD(document.getElementById('foT').value);
        if(v){nm.vence=v;nm.apertura=a||nm.apertura||'';nm.tasa=t||0;}else{delete nm.vence;delete nm.apertura;delete nm.tasa;}}
       if(i>=0)S.cfg.metas[i]=nm;else{nm.id='m'+uid8();S.cfg.metas.push(nm);}persist('config',S.cfg);closeSheet();render();toast('Meta guardada.');};
