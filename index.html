@@ -193,7 +193,7 @@ const CATS=[
  {id:'regalos',n:'Regalos',e:'🎁'},{id:'formacion',n:'Formación y trabajo',e:'📚'},{id:'suscripciones',n:'Suscripciones',e:'📱'},
  {id:'carlos',n:'Pagos por Carlos',e:'🤝'},{id:'imprevistos',n:'Imprevistos',e:'⚡'},{id:'otros',n:'Otros',e:'•'}];
 const INGRESOS=['Sueldo','Prima','Transferencia de Carlos','Venta','Otro'];
-const VERSION='3.1 web · 21 nov 2026';
+const VERSION='3.2 web · 21 nov 2026';
 const arrCfg=()=>Object.assign({on:true,desde:'m-2026-11',inicial:0},(S.cfg&&S.cfg.arr)||{});
 async function carryFor(mk){const a=arrCfg(),aj=a.ajustes||{};if(!a.on||mk<a.desde)return 0;let c=a.inicial||0,k=a.desde,n=0;
   while(k<mk&&n<60){if(aj[k]!=null)c=aj[k];c+=totals(await readMonth(k)).disp;k=addMonths(k,1);n++;}if(aj[mk]!=null)c=aj[mk];return c;}
@@ -596,13 +596,21 @@ async function importMovs(b){
   const pb=(b.planB||[]).filter(f=>f&&f.id&&f.nombre&&!S.cfg.planB.some(k=>k.id===f.id));
   const np=(b.nuevosPrestamos||[]).filter(x=>x&&x.id&&x.persona&&x.monto>0&&!S.cfg.prestamos.some(k=>k.id===x.id));
   const nm=(b.nuevasMetas||[]).filter(m=>m&&m.id&&m.nombre&&!S.cfg.metas.some(k=>k.id===m.id));
+  const cuById=id=>S.cfg.cupos.find(c=>c.id===id), fjById=id=>S.cfg.fijos.find(c=>c.id===id);
+  const uc=(b.actualizarCupos||[]).filter(u=>u&&u.id&&cuById(u.id)&&Object.keys(u).some(k=>k!=='id'&&cuById(u.id)[k]!==u[k]));
+  const uf=(b.actualizarFijos||[]).filter(u=>u&&u.id&&/^m-\d{4}-\d{2}$/.test(u.mes||'')&&u.monto>0&&fjById(u.id)&&montoMes(fjById(u.id),u.mes)!==u.monto);
+  const P0=S.cfg.plan||{},ap=b.actualizarPlan||{};
+  const upl=['cuotas','tasas'].some(k=>Object.entries(ap[k]||{}).some(([i,v])=>((P0[k]||{})[i])!==v));
   const um=(b.actualizarMetas||[]).filter(u=>u&&u.id&&S.cfg.metas.some(k=>k.id===u.id)&&Object.keys(u).some(k=>metaById(u.id)[k]!==u[k]));
   const nuevos=[];
   for(const x of its){const m=await readMonth(keyOf(x.fecha));if(!(m.items||[]).some(i=>i.id===x.id))nuevos.push(x);}
-  const total=nuevos.length+nc.length+nm.length+um.length+np.length+rc.length+tp.length+pb.length;
+  const total=nuevos.length+nc.length+nm.length+um.length+np.length+rc.length+tp.length+pb.length+uc.length+uf.length+(upl?1:0);
   if(!total){toast('Estos cambios ya estaban en la app.');return}
   const lines=nc.map(c=>`Nueva tarjeta: <strong>${esc(c.nombre)}</strong> · cupo ${fmt(c.cupo)}${c.congelado?' · ❄ congelada':''}`)
     .concat(nm.map(m=>`Nueva opción de ahorro: <strong>${esc(m.nombre)}</strong> · tienes ${fmt(m.saldo||0)}`))
+    .concat(uc.map(u=>{const c=cuById(u.id);return `Saldo de <strong>${esc(c.nombre)}</strong>: debes ${fmt(u.consumo!=null?u.consumo:c.consumo)} de ${fmt(u.cupo||c.cupo)}`;}))
+    .concat(uf.map(u=>`<strong>${esc(fjById(u.id).nombre)}</strong> desde ${mkLabel(u.mes)}: ${fmt(u.monto)}`))
+    .concat(upl?[`Plan de deudas: cuotas e intereses del extracto`]:[])
     .concat(um.map(u=>`Actualizar <strong>${esc(u.nombre||metaById(u.id).nombre)}</strong>${u.moneda==='USD'?' · ahora se ve en dólares: '+fmtUSD(u.usd):''}`))
     .concat(rc.map(({r,it})=>`${it.fecha.slice(8)}/${it.fecha.slice(5,7)} · ${esc(it.nota||catById(it.cat).n)} · ${fmt(it.monto)} → pasa a <strong>${catById(r.cat||it.cat).n}</strong>`))
     .concat(tp.map(([k,v])=>`Tope mensual de <strong>${catById(k).n}</strong>: ${fmt(v)}`))
@@ -622,6 +630,10 @@ async function importMovs(b){
     if(np.length)persist('config',S.cfg);
     if(nc.length||nm.length||um.length)persist('config',S.cfg);
     for(const x of nuevos){const y=Object.assign({},x);delete y.hist;await addItem(y);}
+    uc.forEach(u=>{const c=cuById(u.id);Object.assign(c,u);recordSerie(c);});
+    uf.forEach(u=>{const f=fjById(u.id);const h=Object.assign({},f.hist||{'m-0000-00':f.monto});h[u.mes]=u.monto;f.hist=h;f.monto=h[Object.keys(h).sort().pop()];});
+    if(upl){const P=Object.assign({},P0);['cuotas','tasas'].forEach(k=>{P[k]=Object.assign({},P0[k]||{},ap[k]||{});});S.cfg.plan=P;}
+    if(uc.length||uf.length||upl){S.carry=null;persist('config',S.cfg);}
     render();toast(total+' cambios agregados.');});
 }
 
