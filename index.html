@@ -194,7 +194,12 @@ const CATS=[
  {id:'regalos',n:'Regalos',e:'🎁'},{id:'formacion',n:'Formación y trabajo',e:'📚'},{id:'suscripciones',n:'Suscripciones',e:'📱'},
  {id:'carlos',n:'Pagos por Carlos',e:'🤝'},{id:'imprevistos',n:'Imprevistos',e:'⚡'},{id:'otros',n:'Otros',e:'•'}];
 const INGRESOS=['Sueldo','Prima','Transferencia de Carlos','Venta','Otro'];
-const VERSION='3.4 web · 21 nov 2026';
+const VERSION='3.5 web · 21 nov 2026';
+async function forzarActualizacion(){toast('Actualizando…');try{const rg=navigator.serviceWorker&&await navigator.serviceWorker.getRegistration();if(rg)await rg.update();
+  const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)));}catch(e){}location.replace(location.pathname+'?v='+Date.now());}
+function revisarVersion(){if(!navigator.onLine||location.protocol!=='https:')return;fetch('./index.html?v='+Date.now(),{cache:'no-store'}).then(r=>r.text()).then(t=>{const m=t.match(/const VERSION='([^']*)'/);
+  if(m&&m[1]!==VERSION&&!document.getElementById('updBar')){const d=document.createElement('div');d.id='updBar';d.className='alert ice';d.style.cssText='position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:70;justify-content:space-between;align-items:center';
+    d.innerHTML='<p><strong>Hay una versión nueva</strong> ('+m[1].split(' ')[0]+')</p><button class="btn primary" style="min-height:38px;padding:6px 12px">Actualizar</button>';d.querySelector('button').onclick=forzarActualizacion;document.body.appendChild(d);}}).catch(()=>{});}
 const arrCfg=()=>Object.assign({on:true,desde:'m-2026-11',inicial:0},(S.cfg&&S.cfg.arr)||{});
 async function carryFor(mk){const a=arrCfg(),aj=a.ajustes||{};if(!a.on||mk<a.desde)return 0;let c=a.inicial||0,k=a.desde,n=0;
   while(k<mk&&n<60){if(aj[k]!=null)c=aj[k];c+=totals(await readMonth(k)).disp;k=addMonths(k,1);n++;}if(aj[mk]!=null)c=aj[mk];return c;}
@@ -510,8 +515,9 @@ function vTopes(){
   h+=`<section class="block"><h2>Colores de la app</h2><div class="card"><div class="swatches">${Object.entries(TEMAS).map(([k,v])=>`<button class="sw" data-tema="${k}" aria-label="Tema ${k}" aria-pressed="${(cfg.tema||'verde')===k}" style="background:${v[0]}"></button>`).join('')}</div></div></section>
     <section class="block"><h2>Respaldo</h2><div class="card"><p class="small muted" style="margin-top:0">Descarga todo (cupos, metas, fijos, topes y movimientos) en un archivo, o recupéralo desde un respaldo.</p>
     <div class="actions" style="margin-top:6px">${S.downloads||S.mode==='local'?'<button class="btn primary" id="bkDown">Descargar respaldo</button>':''}<button class="btn" id="bkUp">Importar respaldo</button><button class="btn" id="ajUp">Importar ajustes</button><input type="file" id="bkFile" accept=".json,application/json" hidden></div></div></section>
-    <p class="ver">Mi presupuesto · versión ${VERSION}</p>`;
+    <p class="ver">Mi presupuesto · versión ${VERSION}</p><div style="text-align:center"><button class="btn ghost" id="updNow" style="min-height:36px;font-size:.85rem">Buscar actualización</button></div>`;
   main.innerHTML=h;
+  {const u=document.getElementById('updNow');if(u)u.onclick=forzarActualizacion;}
   main.querySelectorAll('[data-tema]').forEach(b=>b.onclick=()=>{cfg.tema=b.dataset.tema;persist('config',cfg);render();});
   {let sg=arrCfg().inicial<0?-1:1;moneyInput(document.getElementById('arIn'));
    main.querySelectorAll('#arSg .chip').forEach(b=>b.onclick=()=>{sg=+b.dataset.s;main.querySelectorAll('#arSg .chip').forEach(o=>o.setAttribute('aria-pressed',o===b));});
@@ -1059,7 +1065,7 @@ document.getElementById('prevM').onclick=()=>shiftMonth(-1);
 document.getElementById('nextM').onclick=()=>shiftMonth(1);
 const hv=(location.hash||'').slice(1); if(['inicio','cupos','topes','historial','graficas'].includes(hv)) S.view=hv;
 setTitle(); init();
-if('serviceWorker' in navigator&&location.protocol==='https:'){navigator.serviceWorker.register('sw.js').catch(()=>{});
+if('serviceWorker' in navigator&&location.protocol==='https:'){navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).catch(()=>{});setTimeout(revisarVersion,1500);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')revisarVersion();});
   let reloaded=false;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(reloaded)return;reloaded=true;location.reload();});}
 })();
 </script>
