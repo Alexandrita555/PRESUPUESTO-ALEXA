@@ -100,6 +100,7 @@ nav.tabs .in{max-width:560px;margin:0 auto;display:grid;grid-template-columns:re
 .tab span{font-size:1.2rem;line-height:1}
 .tab[aria-current="page"]{color:var(--accent);font-weight:700}
 .paid{color:var(--ok);font-weight:700;font-size:.9rem;white-space:nowrap}
+.paid.ab{color:var(--ice-ink)}
 .fab{position:fixed;right:max(16px,calc(50% - 264px));bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:21;border:0;border-radius:999px;background:var(--accent);color:var(--accent-ink);
   font-weight:700;font-size:1rem;padding:15px 20px;box-shadow:0 6px 18px rgba(0,0,0,.18);cursor:pointer}
 /* sheet */
@@ -193,7 +194,7 @@ const CATS=[
  {id:'regalos',n:'Regalos',e:'🎁'},{id:'formacion',n:'Formación y trabajo',e:'📚'},{id:'suscripciones',n:'Suscripciones',e:'📱'},
  {id:'carlos',n:'Pagos por Carlos',e:'🤝'},{id:'imprevistos',n:'Imprevistos',e:'⚡'},{id:'otros',n:'Otros',e:'•'}];
 const INGRESOS=['Sueldo','Prima','Transferencia de Carlos','Venta','Otro'];
-const VERSION='3.3 web · 21 nov 2026';
+const VERSION='3.4 web · 21 nov 2026';
 const arrCfg=()=>Object.assign({on:true,desde:'m-2026-11',inicial:0},(S.cfg&&S.cfg.arr)||{});
 async function carryFor(mk){const a=arrCfg(),aj=a.ajustes||{};if(!a.on||mk<a.desde)return 0;let c=a.inicial||0,k=a.desde,n=0;
   while(k<mk&&n<60){if(aj[k]!=null)c=aj[k];c+=totals(await readMonth(k)).disp;k=addMonths(k,1);n++;}if(aj[mk]!=null)c=aj[mk];return c;}
@@ -353,9 +354,10 @@ function vInicio(){
   setTimeout(()=>{const ce=document.getElementById('cyEdit');if(ce)ce.onclick=sheetCarry;},0);
   // pagos fijos
   if(fijosMes.length){h+=`<section class="block"><h2>Pagos fijos del mes</h2><div class="card">`;
-    fijosMes.forEach(f=>{const pg=pagF(f),fm=montoMes(f,S.mk);
-      h+=`<div class="item"><div class="grow"><div>${f.cupoId?'💳':catById(f.cat).e} ${esc(f.nombre)}</div><div class="small muted">${fmt(fm)}${pg>0&&pg<fm?' · pagado '+fmt(pg):''}${ant[f.id]?' (incluye abono anticipado de '+fmt(ant[f.id])+')':''}</div></div>
-        ${pg>=fm?`<span class="paid">✓ Pagado</span>`:`<button class="btn" data-fpay="${esc(f.id)}">${pg>0?'Pagar resto':'Marcar pagado'}</button>`}</div>`;});
+    fijosMes.forEach(f=>{const pg=pagF(f),fm=montoMes(f,S.mk),ab=ant[f.id]||0,pr=T.fijosPag[f.id]||0,falta=Math.max(0,fm-pg);
+      const det=[ab?'abonado por adelantado '+fmt(ab):'',pr?'pagado '+fmt(pr):'',pg>0&&falta>0?'falta '+fmt(falta):''].filter(Boolean).join(' · ');
+      h+=`<div class="item"><div class="grow"><div>${f.cupoId?'💳':catById(f.cat).e} ${esc(f.nombre)}</div><div class="small muted">${fmt(fm)}${det?' · '+det:''}</div></div>
+        ${pg>=fm?(pr>0?`<span class="paid">✓ Pagado</span>`:`<span class="paid ab">✓ Abonado</span>`):`<button class="btn" data-fpay="${esc(f.id)}">${pg>0?'Pagar resto':'Marcar pagado'}</button>`}</div>`;});
     h+=`</div></section>`;}
   // ingresos extra
   if(T.extras.length){h+=`<section class="block"><h2>Ingresos extra del mes</h2><div class="card">`;
