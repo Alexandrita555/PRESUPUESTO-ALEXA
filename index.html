@@ -128,6 +128,7 @@ input.money{font-family:"Bricolage Grotesque",sans-serif;font-size:2rem;font-wei
 .item:last-child{border-bottom:0}
 .item .grow{flex:1;min-width:0}
 .item .grow div{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .grow div.small{white-space:normal;overflow:visible}
 .amt{font-family:"Bricolage Grotesque",sans-serif;font-weight:700;white-space:nowrap}
 .amt.in{color:var(--ok)}
 .del{border:0;background:transparent;color:var(--muted);font-size:1.05rem;cursor:pointer;width:36px;height:36px;border-radius:99px}
@@ -194,7 +195,7 @@ const CATS=[
  {id:'regalos',n:'Regalos',e:'🎁'},{id:'formacion',n:'Formación y trabajo',e:'📚'},{id:'suscripciones',n:'Suscripciones',e:'📱'},
  {id:'carlos',n:'Pagos por Carlos',e:'🤝'},{id:'imprevistos',n:'Imprevistos',e:'⚡'},{id:'otros',n:'Otros',e:'•'}];
 const INGRESOS=['Sueldo','Prima','Transferencia de Carlos','Venta','Otro'];
-const VERSION='3.5 web · 21 nov 2026';
+const VERSION='3.6 web · 21 nov 2026';
 async function forzarActualizacion(){toast('Actualizando…');try{const rg=navigator.serviceWorker&&await navigator.serviceWorker.getRegistration();if(rg)await rg.update();
   const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)));}catch(e){}location.replace(location.pathname+'?v='+Date.now());}
 function revisarVersion(){if(!navigator.onLine||location.protocol!=='https:')return;fetch('./index.html?v='+Date.now(),{cache:'no-store'}).then(r=>r.text()).then(t=>{const m=t.match(/const VERSION='([^']*)'/);
