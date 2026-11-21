@@ -195,7 +195,7 @@ const CATS=[
  {id:'regalos',n:'Regalos',e:'🎁'},{id:'formacion',n:'Formación y trabajo',e:'📚'},{id:'suscripciones',n:'Suscripciones',e:'📱'},
  {id:'carlos',n:'Pagos por Carlos',e:'🤝'},{id:'imprevistos',n:'Imprevistos',e:'⚡'},{id:'otros',n:'Otros',e:'•'}];
 const INGRESOS=['Sueldo','Prima','Transferencia de Carlos','Venta','Otro'];
-const VERSION='3.6 web · 21 nov 2026';
+const VERSION='3.7 web · 21 nov 2026';
 async function forzarActualizacion(){toast('Actualizando…');try{const rg=navigator.serviceWorker&&await navigator.serviceWorker.getRegistration();if(rg)await rg.update();
   const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)));}catch(e){}location.replace(location.pathname+'?v='+Date.now());}
 function revisarVersion(){if(!navigator.onLine||location.protocol!=='https:')return;fetch('./index.html?v='+Date.now(),{cache:'no-store'}).then(r=>r.text()).then(t=>{const m=t.match(/const VERSION='([^']*)'/);
@@ -603,6 +603,7 @@ async function importMovs(b){
     if(it&&['cat','tipo','nota'].some(k=>r[k]!=null&&it[k]!==r[k]))rc.push({r,it});}
   const tp=Object.entries(b.topes||{}).filter(([k,v])=>CATS.some(c=>c.id===k)&&v>0&&S.cfg.topes[k]!==v);
   const pb=(b.planB||[]).filter(f=>f&&f.id&&f.nombre&&!S.cfg.planB.some(k=>k.id===f.id));
+  const nd=(b.nuevasDeudas||[]).filter(x=>x&&x.id&&x.persona&&x.monto>0&&!S.cfg.deudasP.some(k=>k.id===x.id));
   const np=(b.nuevosPrestamos||[]).filter(x=>x&&x.id&&x.persona&&x.monto>0&&!S.cfg.prestamos.some(k=>k.id===x.id));
   const nm=(b.nuevasMetas||[]).filter(m=>m&&m.id&&m.nombre&&!S.cfg.metas.some(k=>k.id===m.id));
   const cuById=id=>S.cfg.cupos.find(c=>c.id===id), fjById=id=>S.cfg.fijos.find(c=>c.id===id);
@@ -614,7 +615,7 @@ async function importMovs(b){
   const um=(b.actualizarMetas||[]).filter(u=>u&&u.id&&S.cfg.metas.some(k=>k.id===u.id)&&Object.keys(u).some(k=>metaById(u.id)[k]!==u[k]));
   const nuevos=[];
   for(const x of its){const m=await readMonth(keyOf(x.fecha));if(!(m.items||[]).some(i=>i.id===x.id))nuevos.push(x);}
-  const total=nuevos.length+nc.length+nm.length+um.length+np.length+rc.length+tp.length+pb.length+uc.length+uf.length+(upl?1:0)+an.length;
+  const total=nuevos.length+nc.length+nm.length+um.length+np.length+rc.length+tp.length+pb.length+uc.length+uf.length+(upl?1:0)+an.length+nd.length;
   if(!total){toast('Estos cambios ya estaban en la app.');return}
   const lines=nc.map(c=>`Nueva tarjeta: <strong>${esc(c.nombre)}</strong> · cupo ${fmt(c.cupo)}${c.congelado?' · ❄ congelada':''}`)
     .concat(nm.map(m=>`Nueva opción de ahorro: <strong>${esc(m.nombre)}</strong> · tienes ${fmt(m.saldo||0)}`))
@@ -625,6 +626,7 @@ async function importMovs(b){
     .concat(um.map(u=>`Actualizar <strong>${esc(u.nombre||metaById(u.id).nombre)}</strong>${u.moneda==='USD'?' · ahora se ve en dólares: '+fmtUSD(u.usd):''}`))
     .concat(rc.map(({r,it})=>`${it.fecha.slice(8)}/${it.fecha.slice(5,7)} · ${esc(it.nota||catById(it.cat).n)} · ${fmt(it.monto)} → pasa a <strong>${catById(r.cat||it.cat).n}</strong>`))
     .concat(tp.map(([k,v])=>`Tope mensual de <strong>${catById(k).n}</strong>: ${fmt(v)}`))
+    .concat(nd.map(x=>`Yo debo: <strong>${esc(x.persona)}</strong>${x.nota?' ('+esc(x.nota)+')':''} · ${fmt(x.monto-(x.pagado||0))}${x.devolver?' · devolver antes del '+fCorta(x.devolver):''}`))
     .concat(pb.map(f=>`Plan B: <strong>${esc(f.nombre)}</strong>${f.costo?' · '+esc(f.costo):''}`))
     .concat(np.map(x=>`Préstamo a <strong>${esc(x.persona)}</strong>${x.nota?' ('+esc(x.nota)+')':''} · ${esc(x.cuando||x.fecha||'')} · ${fmt(x.monto)}`))
     .concat(nuevos.map(x=>`${x.fecha.slice(8)}/${x.fecha.slice(5,7)} · ${esc(descMov(x)+(x.prestamoId&&!S.cfg.prestamos.some(k=>k.id===x.prestamoId)?((np.find(k=>k.id===x.prestamoId)||{}).persona||''):''))} · <strong>${fmt(x.monto)}</strong>`));
@@ -634,6 +636,7 @@ async function importMovs(b){
     um.forEach(u=>Object.assign(metaById(u.id),u));
     np.forEach(x=>S.cfg.prestamos.push(Object.assign({pagado:0},x)));
     if(pb.length){pb.forEach(f=>S.cfg.planB.push(f));persist('config',S.cfg);}
+    if(nd.length){nd.forEach(x=>S.cfg.deudasP.push(Object.assign({pagado:0},x)));persist('config',S.cfg);}
     if(tp.length){tp.forEach(([k,v])=>S.cfg.topes[k]=v);persist('config',S.cfg);}
     {const meses={};for(const {r} of rc){(meses[r.mes]=meses[r.mes]||[]).push(r);}
      for(const [mk,rs] of Object.entries(meses)){const m=await readMonth(mk);rs.forEach(r=>{const it=m.items.find(i=>i.id===r.id);if(it){['cat','tipo','nota'].forEach(k=>{if(r[k]!=null)it[k]=r[k];});}});
