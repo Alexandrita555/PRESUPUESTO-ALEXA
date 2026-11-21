@@ -193,10 +193,24 @@ const CATS=[
  {id:'regalos',n:'Regalos',e:'🎁'},{id:'formacion',n:'Formación y trabajo',e:'📚'},{id:'suscripciones',n:'Suscripciones',e:'📱'},
  {id:'carlos',n:'Pagos por Carlos',e:'🤝'},{id:'imprevistos',n:'Imprevistos',e:'⚡'},{id:'otros',n:'Otros',e:'•'}];
 const INGRESOS=['Sueldo','Prima','Transferencia de Carlos','Venta','Otro'];
-const VERSION='3.0 web · 21 nov 2026';
+const VERSION='3.1 web · 21 nov 2026';
 const arrCfg=()=>Object.assign({on:true,desde:'m-2026-11',inicial:0},(S.cfg&&S.cfg.arr)||{});
-async function carryFor(mk){const a=arrCfg();if(!a.on||mk<a.desde)return 0;let c=a.inicial||0,k=a.desde,n=0;
-  while(k<mk&&n<60){c+=totals(await readMonth(k)).disp;k=addMonths(k,1);n++;}return c;}
+async function carryFor(mk){const a=arrCfg(),aj=a.ajustes||{};if(!a.on||mk<a.desde)return 0;let c=a.inicial||0,k=a.desde,n=0;
+  while(k<mk&&n<60){if(aj[k]!=null)c=aj[k];c+=totals(await readMonth(k)).disp;k=addMonths(k,1);n++;}if(aj[mk]!=null)c=aj[mk];return c;}
+function sheetCarry(){const a=arrCfg(),aj=a.ajustes||{},mk=S.mk,cur=(S.carry&&S.carry.mk===mk)?S.carry.v:0;let sg=cur<0?-1:1;
+  openSheet(`<h3>Saldo que pasó de ${mkLabel(addMonths(mk,-1))}</h3><p class="small muted" style="margin-top:0">Escribe lo que realmente te quedó (o te faltó) al empezar ${mkLabel(mk)}. Los meses siguientes se recalculan desde este valor.</p>
+    <label class="f" for="cyM">Valor</label><input class="t money" id="cyM" inputmode="numeric" value="${cur?Math.abs(cur).toLocaleString('es-CO'):''}" placeholder="$0">
+    <div class="chips" style="margin-top:8px" id="cySg"><button class="chip" data-s="1" aria-pressed="${sg>0}">Me sobró</button><button class="chip" data-s="-1" aria-pressed="${sg<0}">Me faltó</button></div>
+    <div style="margin-top:14px"><button class="btn primary block" id="cySave">Guardar</button></div>
+    ${aj[mk]!=null||mk===a.desde?`<div style="margin-top:8px"><button class="btn ghost block" id="cyAuto">${mk===a.desde?'Dejar en $0':'Volver al cálculo automático'}</button></div>`:''}`,()=>{
+    moneyInput(document.getElementById('cyM'));
+    sb.querySelectorAll('#cySg .chip').forEach(b=>b.onclick=()=>{sg=+b.dataset.s;sb.querySelectorAll('#cySg .chip').forEach(o=>o.setAttribute('aria-pressed',o===b));});
+    const save=v=>{const na=Object.assign({},a);na.ajustes=Object.assign({},aj);
+      if(mk===a.desde){na.inicial=v==null?0:v;delete na.ajustes[mk];}else if(v==null)delete na.ajustes[mk];else na.ajustes[mk]=v;
+      S.cfg.arr=na;S.carry=null;persist('config',S.cfg);closeSheet();render();toast('Saldo actualizado.');};
+    document.getElementById('cySave').onclick=()=>save(sg*parseMoney(document.getElementById('cyM').value));
+    const au=document.getElementById('cyAuto');if(au)au.onclick=()=>save(null);
+  });}
 let carryBusy=false;
 async function updateCarry(){if(carryBusy)return;carryBusy=true;const mk=S.mk;try{const v=await carryFor(mk);
   if(mk===S.mk&&(!S.carry||S.carry.mk!==mk||S.carry.v!==v)){S.carry={mk,v};if(S.view==='inicio')render();}}finally{carryBusy=false;}}
@@ -324,7 +338,7 @@ function vInicio(){
     h+=`<div class="card" style="margin-top:16px"><b>¿Vienes de la versión de Claude?</b><p class="small muted">Trae todos tus datos importando el respaldo que descargaste allá.</p><button class="btn primary block" id="firstImp">Importar respaldo</button><input type="file" id="firstFile" accept=".json,application/json" hidden></div>`;
   h+=`<div class="hero"><p class="lead">${T.ing||carry?'Te queda disponible este mes':'Registra tus ingresos del mes para ver cuánto te queda'}</p>
     <p class="big num ${dispT<0?'neg':''}">${fmt(dispT)}</p>
-    ${carry?`<p class="sub">${carry>0?`Incluye <b class="num">${fmt(carry)}</b> que te quedó de ${mPrev}`:`Incluye <b class="num" style="color:var(--danger)">${fmt(carry)}</b> que te faltó en ${mPrev}`}</p>`:''}
+    ${arrCfg().on&&S.mk>=arrCfg().desde?`<p class="sub">${carry>0?`Incluye <b class="num">${fmt(carry)}</b> que te quedó de ${mPrev}`:carry<0?`Incluye <b class="num" style="color:var(--danger)">${fmt(carry)}</b> que te faltó en ${mPrev}`:`Saldo de ${mPrev}: $0`}${(arrCfg().ajustes||{})[S.mk]!=null?' (ajustado)':''} <button class="btn ghost" id="cyEdit" style="min-height:30px;padding:2px 8px;font-size:.8rem">Editar</button></p>`:''}
     ${pend>0?`<p class="sub">Después de los pagos fijos pendientes te quedarían <b class="num" style="color:${dispT-pend<0?'var(--danger)':'var(--ink)'}">${fmt(dispT-pend)}</b></p>`:''}
     <div class="trio"><div><small>Ingresos</small><b>${fmt(T.ing)}</b></div><div><small>Gastado</small><b>${fmt(T.gas)}</b></div><div><small>Pagado a deudas</small><b>${fmt(T.pag)}</b></div><div><small>${T.ah<0?'Sacado del ahorro':'Ahorrado'}</small><b>${fmt(Math.abs(T.ah))}</b></div></div></div>`;
   if(recs.length&&S.mk===keyOf(today()))h+=`<section class="block" style="margin-top:12px"><h2>Repetir con un toque</h2><div class="rep">${recs.map((r,i)=>`<button class="chip" data-rep="${i}">${catById(r.cat).e} ${esc(r.nota||catById(r.cat).n)} · ${fmt(r.monto)}</button>`).join('')}</div></section>`;
@@ -336,6 +350,7 @@ function vInicio(){
      segs.concat([['Libre',Math.max(0,libre),'--c5']]).map(x=>`<span><em style="background:var(${x[2]})"></em>${x[0]}<b>${fmt(x[1])}</b></span>`).join('')+`</div>`+
      (libre<0?`<div class="alert danger"><p>Lo que ya salió más lo que falta por pagar supera lo que tienes este mes en <strong>${fmt(-libre)}</strong>.</p></div>`:'')+`</div></section>`;}}
   setTimeout(updateCarry,0);
+  setTimeout(()=>{const ce=document.getElementById('cyEdit');if(ce)ce.onclick=sheetCarry;},0);
   // pagos fijos
   if(fijosMes.length){h+=`<section class="block"><h2>Pagos fijos del mes</h2><div class="card">`;
     fijosMes.forEach(f=>{const pg=pagF(f),fm=montoMes(f,S.mk);
