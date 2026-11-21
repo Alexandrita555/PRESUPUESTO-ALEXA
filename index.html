@@ -193,7 +193,13 @@ const CATS=[
  {id:'regalos',n:'Regalos',e:'🎁'},{id:'formacion',n:'Formación y trabajo',e:'📚'},{id:'suscripciones',n:'Suscripciones',e:'📱'},
  {id:'carlos',n:'Pagos por Carlos',e:'🤝'},{id:'imprevistos',n:'Imprevistos',e:'⚡'},{id:'otros',n:'Otros',e:'•'}];
 const INGRESOS=['Sueldo','Prima','Transferencia de Carlos','Venta','Otro'];
-const VERSION='2.9 web · 18 nov 2026';
+const VERSION='3.0 web · 21 nov 2026';
+const arrCfg=()=>Object.assign({on:true,desde:'m-2026-11',inicial:0},(S.cfg&&S.cfg.arr)||{});
+async function carryFor(mk){const a=arrCfg();if(!a.on||mk<a.desde)return 0;let c=a.inicial||0,k=a.desde,n=0;
+  while(k<mk&&n<60){c+=totals(await readMonth(k)).disp;k=addMonths(k,1);n++;}return c;}
+let carryBusy=false;
+async function updateCarry(){if(carryBusy)return;carryBusy=true;const mk=S.mk;try{const v=await carryFor(mk);
+  if(mk===S.mk&&(!S.carry||S.carry.mk!==mk||S.carry.v!==v)){S.carry={mk,v};if(S.view==='inicio')render();}}finally{carryBusy=false;}}
 const montoMes=(f,mk)=>{const h=f&&f.hist;if(!h)return f.monto;const ks=Object.keys(h).filter(k=>k<=mk).sort();return ks.length?h[ks[ks.length-1]]:(h[Object.keys(h).sort()[0]]);};
 const TIPOS=[{id:'necesario',n:'Necesario'},{id:'planeado',n:'Planeado'},{id:'antojo',n:'Antojo'}];
 const TEMAS={verde:['#1F6F5C','#4FB79A'],azul:['#2763A8','#6FA8E8'],ciruela:['#7A3E7A','#C58BC5'],atardecer:['#C2502E','#F08A63']};
@@ -308,6 +314,7 @@ function bar(p,cls){return `<div class="bar"><i class="${cls}" style="width:${Ma
 
 function vInicio(){
   const T=totals(S.month), cfg=S.cfg; let h='';
+  const carry=(S.carry&&S.carry.mk===S.mk)?S.carry.v:0, dispT=T.disp+carry, mPrev=mkLabel(addMonths(S.mk,-1));
   const ant=(cfg.anticipos||{})[S.mk]||{};
   const pagF=f=>(T.fijosPag[f.id]||0)+(ant[f.id]||0);
   const fijosMes=cfg.fijos.filter(f=>!f.desde||S.mk>=f.desde);
@@ -315,18 +322,20 @@ function vInicio(){
   const recs=(cfg.rec||[]).slice(0,8);
   if(S.mode==='local'&&!cfg.cupos.length&&!cfg.metas.length&&!(S.month.items||[]).length)
     h+=`<div class="card" style="margin-top:16px"><b>¿Vienes de la versión de Claude?</b><p class="small muted">Trae todos tus datos importando el respaldo que descargaste allá.</p><button class="btn primary block" id="firstImp">Importar respaldo</button><input type="file" id="firstFile" accept=".json,application/json" hidden></div>`;
-  h+=`<div class="hero"><p class="lead">${T.ing?'Te queda disponible este mes':'Registra tus ingresos del mes para ver cuánto te queda'}</p>
-    <p class="big num ${T.disp<0?'neg':''}">${fmt(T.disp)}</p>
-    ${pend>0?`<p class="sub">Después de los pagos fijos pendientes te quedarían <b class="num" style="color:${T.disp-pend<0?'var(--danger)':'var(--ink)'}">${fmt(T.disp-pend)}</b></p>`:''}
+  h+=`<div class="hero"><p class="lead">${T.ing||carry?'Te queda disponible este mes':'Registra tus ingresos del mes para ver cuánto te queda'}</p>
+    <p class="big num ${dispT<0?'neg':''}">${fmt(dispT)}</p>
+    ${carry?`<p class="sub">${carry>0?`Incluye <b class="num">${fmt(carry)}</b> que te quedó de ${mPrev}`:`Incluye <b class="num" style="color:var(--danger)">${fmt(carry)}</b> que te faltó en ${mPrev}`}</p>`:''}
+    ${pend>0?`<p class="sub">Después de los pagos fijos pendientes te quedarían <b class="num" style="color:${dispT-pend<0?'var(--danger)':'var(--ink)'}">${fmt(dispT-pend)}</b></p>`:''}
     <div class="trio"><div><small>Ingresos</small><b>${fmt(T.ing)}</b></div><div><small>Gastado</small><b>${fmt(T.gas)}</b></div><div><small>Pagado a deudas</small><b>${fmt(T.pag)}</b></div><div><small>${T.ah<0?'Sacado del ahorro':'Ahorrado'}</small><b>${fmt(Math.abs(T.ah))}</b></div></div></div>`;
   if(recs.length&&S.mk===keyOf(today()))h+=`<section class="block" style="margin-top:12px"><h2>Repetir con un toque</h2><div class="rep">${recs.map((r,i)=>`<button class="chip" data-rep="${i}">${catById(r.cat).e} ${esc(r.nota||catById(r.cat).n)} · ${fmt(r.monto)}</button>`).join('')}</div></section>`;
   // visual de lo que va quedando
-  {const segs=[['Gastos',T.cash,'--c1'],['Pagos a deudas',T.pag,'--c2'],['Ahorro',Math.max(0,T.ah),'--c3'],['Fijos por pagar',pend,'--c4']].concat(T.prest>0?[['Préstamos dados',T.prest,'--c6']]:[]).concat(T.devol>0?[['Devoluciones',T.devol,'--c2']]:[]);
-   const ent=T.ing+T.abono+T.recib, usado=segs.reduce((a,x)=>a+x[1],0), libre=ent-usado, tot=Math.max(ent,usado);
+  {const segs=[['Gastos',T.cash,'--c1'],['Pagos a deudas',T.pag,'--c2'],['Ahorro',Math.max(0,T.ah),'--c3'],['Fijos por pagar',pend,'--c4']].concat(T.prest>0?[['Préstamos dados',T.prest,'--c6']]:[]).concat(T.devol>0?[['Devoluciones',T.devol,'--c2']]:[]).concat(carry<0?[['Faltó del mes anterior',-carry,'--c2']]:[]);
+   const ent=T.ing+T.abono+T.recib+Math.max(0,carry), usado=segs.reduce((a,x)=>a+x[1],0), libre=ent-usado, tot=Math.max(ent,usado);
    if(tot>0){h+=`<section class="block"><h2>Así va tu plata del mes</h2><div class="card"><div class="money" role="img" aria-label="Distribución del dinero del mes">`+
      segs.concat(libre>0?[['Libre',libre,'--c5']]:[]).filter(x=>x[1]>0).map(x=>`<i style="width:${(x[1]/tot*100).toFixed(2)}%;background:var(${x[2]})"></i>`).join('')+`</div><div class="legend">`+
      segs.concat([['Libre',Math.max(0,libre),'--c5']]).map(x=>`<span><em style="background:var(${x[2]})"></em>${x[0]}<b>${fmt(x[1])}</b></span>`).join('')+`</div>`+
-     (libre<0?`<div class="alert danger"><p>Lo que ya salió más lo que falta por pagar supera tus ingresos del mes en <strong>${fmt(-libre)}</strong>.</p></div>`:'')+`</div></section>`;}}
+     (libre<0?`<div class="alert danger"><p>Lo que ya salió más lo que falta por pagar supera lo que tienes este mes en <strong>${fmt(-libre)}</strong>.</p></div>`:'')+`</div></section>`;}}
+  setTimeout(updateCarry,0);
   // pagos fijos
   if(fijosMes.length){h+=`<section class="block"><h2>Pagos fijos del mes</h2><div class="card">`;
     fijosMes.forEach(f=>{const pg=pagF(f),fm=montoMes(f,S.mk);
@@ -473,12 +482,24 @@ function vTopes(){
   CATS.forEach(c=>{h+=`<div class="topes-row"><span class="em">${c.e}</span><label for="tp-${c.id}">${c.n}<div class="small muted">Este mes: ${fmt(T.porCat[c.id]||0)}</div></label>
     <input class="t num" id="tp-${c.id}" inputmode="numeric" placeholder="Sin tope" value="${t[c.id]?Number(t[c.id]).toLocaleString('es-CO'):''}"></div>`;});
   h+=`</div><div style="margin-top:14px"><button class="btn primary block" id="saveTopes">Guardar topes</button></div></section>`;
+  {const a=arrCfg(),opts=[...Array(14)].map((_,k)=>addMonths(keyOf(today()),k-12));if(!opts.includes(a.desde))opts.unshift(a.desde);
+   h+=`<section class="block"><h2>Saldo entre meses</h2><div class="card">
+    <label class="f" style="display:flex;gap:10px;align-items:center;margin-top:0"><input type="checkbox" id="arOn" ${a.on?'checked':''} style="width:22px;height:22px"> Pasar lo que me queda (o me falta) de un mes al siguiente</label>
+    <label class="f" for="arDe">Empezar desde</label><select class="t" id="arDe">${opts.map(k=>`<option value="${k}" ${k===a.desde?'selected':''}>${mkLabel(k)}</option>`).join('')}</select>
+    <label class="f" for="arIn">Con cuánto empezaste ese mes (lo que tenías en tus cuentas)</label><input class="t num" id="arIn" inputmode="numeric" value="${a.inicial?Math.abs(a.inicial).toLocaleString('es-CO'):''}" placeholder="$0">
+    <div class="chips" style="margin-top:8px" id="arSg"><button class="chip" data-s="1" aria-pressed="${!(a.inicial<0)}">Me sobró</button><button class="chip" data-s="-1" aria-pressed="${a.inicial<0}">Me faltó</button></div>
+    <p class="small muted">Lo que no gastes ni ahorres en un mes aparece como disponible en el siguiente. Si un mes cierras en rojo, ese faltante también pasa.</p>
+    <button class="btn primary block" id="arSave">Guardar</button></div></section>`;}
   h+=`<section class="block"><h2>Colores de la app</h2><div class="card"><div class="swatches">${Object.entries(TEMAS).map(([k,v])=>`<button class="sw" data-tema="${k}" aria-label="Tema ${k}" aria-pressed="${(cfg.tema||'verde')===k}" style="background:${v[0]}"></button>`).join('')}</div></div></section>
     <section class="block"><h2>Respaldo</h2><div class="card"><p class="small muted" style="margin-top:0">Descarga todo (cupos, metas, fijos, topes y movimientos) en un archivo, o recupéralo desde un respaldo.</p>
     <div class="actions" style="margin-top:6px">${S.downloads||S.mode==='local'?'<button class="btn primary" id="bkDown">Descargar respaldo</button>':''}<button class="btn" id="bkUp">Importar respaldo</button><button class="btn" id="ajUp">Importar ajustes</button><input type="file" id="bkFile" accept=".json,application/json" hidden></div></div></section>
     <p class="ver">Mi presupuesto · versión ${VERSION}</p>`;
   main.innerHTML=h;
   main.querySelectorAll('[data-tema]').forEach(b=>b.onclick=()=>{cfg.tema=b.dataset.tema;persist('config',cfg);render();});
+  {let sg=arrCfg().inicial<0?-1:1;moneyInput(document.getElementById('arIn'));
+   main.querySelectorAll('#arSg .chip').forEach(b=>b.onclick=()=>{sg=+b.dataset.s;main.querySelectorAll('#arSg .chip').forEach(o=>o.setAttribute('aria-pressed',o===b));});
+   document.getElementById('arSave').onclick=()=>{cfg.arr={on:document.getElementById('arOn').checked,desde:document.getElementById('arDe').value,inicial:sg*parseMoney(document.getElementById('arIn').value)};
+     S.carry=null;persist('config',cfg);toast('Guardado. El saldo pasará de un mes al siguiente.');render();};}
   main.querySelectorAll('[data-medit]').forEach(b=>b.onclick=()=>sheetMeta(+b.dataset.medit));
   document.getElementById('addMeta').onclick=()=>sheetMeta(-1);
   document.getElementById('addPB').onclick=()=>sheetPlanB(-1);
